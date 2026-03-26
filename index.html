@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>每日饮食与支出记录</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root{
+      --bg:#f6f8fb;
+      --card:#ffffff;
+      --text:#1f2937;
+      --sub:#6b7280;
+      --primary:#2563eb;
+      --primary-hover:#1d4ed8;
+      --success:#10b981;
+      --border:#e5e7eb;
+      --danger:#ef4444;
+      --shadow:0 8px 24px rgba(15,23,42,.06);
+      --radius:14px;
+    }
+
+    * { box-sizing: border-box; }
+    body{
+      margin:0;
+      font-family: "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      line-height:1.5;
+    }
+
+    .container{
+      max-width:1100px;
+      margin:24px auto;
+      padding:0 16px 32px;
+    }
+
+    h1{
+      margin:8px 0 20px;
+      font-size:28px;
+      font-weight:700;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap:16px;
+    }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:16px;
+    }
+
+    .card h2{
+      margin:0 0 12px;
+      font-size:18px;
+    }
+
+    .col-4{ grid-column: span 4; }
+    .col-5{ grid-column: span 5; }
+    .col-6{ grid-column: span 6; }
+    .col-7{ grid-column: span 7; }
+    .col-12{ grid-column: span 12; }
+
+    @media (max-width: 920px){
+      .col-4,.col-5,.col-6,.col-7 { grid-column: span 12; }
+    }
+
+    .form-row{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      margin-bottom:12px;
+    }
+
+    label{
+      color:var(--sub);
+      font-size:13px;
+      font-weight:600;
+    }
+
+    input{
+      width:100%;
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:10px 12px;
+      font-size:14px;
+      outline:none;
+      transition:.2s border-color, .2s box-shadow;
+      background:#fff;
+    }
+
+    input:focus{
+      border-color:var(--primary);
+      box-shadow:0 0 0 3px rgba(37,99,235,.12);
+    }
+
+    button{
+      border:none;
+      border-radius:10px;
+      padding:10px 14px;
+      font-size:14px;
+      font-weight:600;
+      cursor:pointer;
+      transition:.2s transform, .2s opacity, .2s background;
+    }
+
+    button:active{ transform:translateY(1px); }
+
+    .btn-primary{
+      background:var(--primary);
+      color:white;
+      width:100%;
+    }
+    .btn-primary:hover{ background:var(--primary-hover); }
+
+    .summary{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+    }
+    .summary-item{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:12px;
+      background:#fafafa;
+    }
+    .summary-item .k{
+      color:var(--sub);
+      font-size:13px;
+      margin-bottom:6px;
+    }
+    .summary-item .v{
+      font-size:22px;
+      font-weight:700;
+      color:var(--success);
+    }
+
+    .toolbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:12px;
+      flex-wrap:wrap;
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      overflow:hidden;
+      border:1px solid var(--border);
+      border-radius:10px;
+    }
+    th,td{
+      text-align:left;
+      padding:10px 12px;
+      border-bottom:1px solid var(--border);
+      font-size:14px;
+    }
+    th{
+      background:#f9fafb;
+      color:#374151;
+      font-weight:700;
+    }
+    tbody tr:hover{
+      background:#fcfcfd;
+    }
+    .empty{
+      color:var(--sub);
+      font-size:14px;
+      padding:14px;
+      border:1px dashed var(--border);
+      border-radius:10px;
+      text-align:center;
+    }
+
+    .daily-total{
+      margin-top:10px;
+      font-weight:700;
+      color:#0f766e;
+    }
+
+    .charts-wrap{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+    }
+    @media (max-width: 920px){
+      .charts-wrap{ grid-template-columns:1fr; }
+    }
+
+    .chart-box{
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      background:#fff;
+      min-height:330px;
+    }
+
+    .hint{
+      margin-top:8px;
+      color:var(--sub);
+      font-size:12px;
+    }
+
+    .msg{
+      margin-top:8px;
+      font-size:13px;
+      color:var(--danger);
+      min-height:18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🍱 每日饮食与支出记录</h1>
+
+    <div class="grid">
+      <!-- 输入区 -->
+      <section class="card col-4">
+        <h2>添加新记录</h2>
+        <form id="recordForm">
+          <div class="form-row">
+            <label for="foodInput">食物名称</label>
+            <input id="foodInput" type="text" placeholder="例如：苹果 / 午餐便当" required />
+          </div>
+          <div class="form-row">
+            <label for="priceInput">价格（元）</label>
+            <input id="priceInput" type="number" min="0" step="0.01" placeholder="例如：12.5" required />
+          </div>
+          <div class="form-row">
+            <label for="dateInput">日期</label>
+            <input id="dateInput" type="date" required />
+          </div>
+          <button class="btn-primary" type="submit">保存记录</button>
+          <div id="formMsg" class="msg"></div>
+        </form>
+      </section>
+
+      <!-- 汇总区 -->
+      <section class="card col-4">
+        <h2>每周 / 每月汇总</h2>
+        <div class="summary">
+          <div class="summary-item">
+            <div class="k">本周总支出</div>
+            <div id="weeklyTotal" class="v">¥0.00</div>
+          </div>
+          <div class="summary-item">
+            <div class="k">本月总支出</div>
+            <div id="monthlyTotal" class="v">¥0.00</div>
+          </div>
+        </div>
+        <div class="hint">注：本周按周一 ~ 周日统计；本月按自然月统计。</div>
+      </section>
+
+      <!-- 历史记录区 -->
+      <section class="card col-4">
+        <h2>按日期查看历史</h2>
+        <div class="form-row">
+          <label for="filterDate">选择日期</label>
+          <input id="filterDate" type="date" />
+        </div>
+        <div id="dailyTotalText" class="daily-total">当日总支出：¥0.00</div>
+      </section>
+
+      <!-- 当日明细 -->
+      <section class="card col-12">
+        <h2>当日记录明细</h2>
+        <div id="historyContainer"></div>
+      </section>
+
+      <!-- 图表区 -->
+      <section class="card col-12">
+        <h2>数据可视化</h2>
+        <div class="charts-wrap">
+          <div class="chart-box">
+            <canvas id="barChart"></canvas>
+          </div>
+          <div class="chart-box">
+            <canvas id="pieChart"></canvas>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    /**********************
+     * 工具函数
+     **********************/
+    const STORAGE_KEY = "diet_expense_records";
+
+    // 将 Date -> YYYY-MM-DD（本地时区）
+    function formatDate(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const d = String(dateObj.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    // 安全读取 localStorage
+    function getRecords() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      try {
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+      } catch {
+        return [];
+      }
+    }
+
+    // 写入 localStorage
+    function setRecords(records) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    }
+
+    // 金额格式化
+    function money(n) {
+      return `¥${Number(n).toFixed(2)}`;
+    }
+
+    // 计算某天总支出
+    function getDailyTotal(dateStr) {
+      return getRecords()
+        .filter(item => item.date === dateStr)
+        .reduce((sum, item) => sum + Number(item.price), 0);
+    }
+
+    // 获取本周范围（周一开始）
+    function getWeekRange(date = new Date()) {
+      const d = new Date(date);
+      const day = d.getDay(); // 周日是 0
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(d);
+      monday.setDate(d.getDate() + diffToMonday);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      return { monday, sunday };
+    }
+
+    // 本周总支出
+    function getWeeklyTotal() {
+      const { monday, sunday } = getWeekRange(new Date());
+      const records = getRecords();
+      return records.reduce((sum, item) => {
+        const d = new Date(item.date + "T00:00:00");
+        if (d >= monday && d <= sunday) {
+          return sum + Number(item.price);
+        }
+        return sum;
+      }, 0);
+    }
+
+    // 本月总支出
+    function getMonthlyTotal() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth();
+      const records = getRecords();
+
+      return records.reduce((sum, item) => {
+        const d = new Date(item.date + "T00:00:00");
+        if (d.getFullYear() === y && d.getMonth() === m) {
+          return sum + Number(item.price);
+        }
+        return sum;
+      }, 0);
+    }
+
+    // 获取过去 N 天（含今天）的日期数组（升序）
+    function getPastNDates(n = 7) {
+      const arr = [];
+      const today = new Date();
+      for (let i = n - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        arr.push(formatDate(d));
+      }
+      return arr;
+    }
+
+    /**********************
+     * DOM
+     **********************/
+    const recordForm = document.getElementById("recordForm");
+    const foodInput = document.getElementById("foodInput");
+    const priceInput = document.getElementById("priceInput");
+    const dateInput = document.getElementById("dateInput");
+    const filterDate = document.getElementById("filterDate");
+    const formMsg = document.getElementById("formMsg");
+
+    const weeklyTotalEl = document.getElementById("weeklyTotal");
+    const monthlyTotalEl = document.getElementById("monthlyTotal");
+    const historyContainer = document.getElementById("historyContainer");
+    const dailyTotalText = document.getElementById("dailyTotalText");
+
+    let barChartInstance = null;
+    let pieChartInstance = null;
+
+    /**********************
+     * 渲染函数
+     **********************/
+    function renderHistoryByDate(dateStr) {
+      const records = getRecords()
+        .filter(item => item.date === dateStr)
+        .sort((a, b) => b.id - a.id);
+
+      if (records.length === 0) {
+        historyContainer.innerHTML = `<div class="empty">${dateStr} 暂无记录</div>`;
+      } else {
+        const rows = records.map((item, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${item.food}</td>
+            <td>${money(item.price)}</td>
+            <td>${item.date}</td>
+          </tr>
+        `).join("");
+
+        historyContainer.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>食物名称</th>
+                <th>价格</th>
+                <th>日期</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      }
+
+      const total = getDailyTotal(dateStr);
+      dailyTotalText.textContent = `当日总支出：${money(total)}`;
+    }
+
+    function renderSummary() {
+      weeklyTotalEl.textContent = money(getWeeklyTotal());
+      monthlyTotalEl.textContent = money(getMonthlyTotal());
+    }
+
+    function renderBarChart() {
+      const labels = getPastNDates(7); // 过去7天
+      const data = labels.map(date => getDailyTotal(date));
+
+      if (barChartInstance) barChartInstance.destroy();
+
+      barChartInstance = new Chart(document.getElementById("barChart"), {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "每日总支出（元）",
+            data,
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true },
+            title: { display: true, text: "过去 7 天支出趋势" }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    // 饼图：当月最贵 5 笔花费
+    function renderPieChart() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth();
+
+      const monthlyRecords = getRecords()
+        .filter(item => {
+          const d = new Date(item.date + "T00:00:00");
+          return d.getFullYear() === y && d.getMonth() === m;
+        })
+        .sort((a, b) => Number(b.price) - Number(a.price))
+        .slice(0, 5);
+
+      if (pieChartInstance) pieChartInstance.destroy();
+
+      const canvas = document.getElementById("pieChart");
+
+      if (monthlyRecords.length === 0) {
+        pieChartInstance = new Chart(canvas, {
+          type: "pie",
+          data: {
+            labels: ["暂无数据"],
+            datasets: [{ data: [1] }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { title: { display: true, text: "当月支出构成（最贵 5 笔）" } }
+          }
+        });
+        return;
+      }
+
+      pieChartInstance = new Chart(canvas, {
+        type: "pie",
+        data: {
+          labels: monthlyRecords.map(item => `${item.food} (${item.date})`),
+          datasets: [{
+            label: "金额",
+            data: monthlyRecords.map(item => Number(item.price))
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            title: { display: true, text: "当月支出构成（最贵 5 笔）" }
+          }
+        }
+      });
+    }
+
+    function renderAll() {
+      const selectedDate = filterDate.value || formatDate(new Date());
+      renderHistoryByDate(selectedDate);
+      renderSummary();
+      renderBarChart();
+      renderPieChart();
+    }
+
+    /**********************
+     * 事件逻辑
+     **********************/
+    function addRecord({ food, price, date }) {
+      const records = getRecords();
+
+      // 使用时间戳 + 随机数组合，避免 id 冲突
+      const newRecord = {
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        date,              // YYYY-MM-DD
+        food: food.trim(),
+        price: Number(price)
+      };
+
+      records.push(newRecord);
+      setRecords(records);
+    }
+
+    recordForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      formMsg.textContent = "";
+
+      const food = foodInput.value.trim();
+      const price = priceInput.value;
+      const date = dateInput.value;
+
+      // 基础校验
+      if (!food) {
+        formMsg.textContent = "请输入食物名称";
+        return;
+      }
+      if (price === "" || Number(price) < 0) {
+        formMsg.textContent = "请输入合法价格（>= 0）";
+        return;
+      }
+      // 日期格式由 input[type=date] 保证；这里再做非空校验
+      if (!date) {
+        formMsg.textContent = "请选择日期";
+        return;
+      }
+
+      addRecord({ food, price, date });
+
+      // 提交后重置部分输入
+      foodInput.value = "";
+      priceInput.value = "";
+      // 日期保留当前值，方便连续录入同一天
+
+      // 自动刷新所有视图与图表
+      renderAll();
+    });
+
+    filterDate.addEventListener("change", () => {
+      renderHistoryByDate(filterDate.value);
+    });
+
+    /**********************
+     * 初始化
+     **********************/
+    (function init() {
+      const today = formatDate(new Date());
+
+      // 默认日期：今天
+      dateInput.value = today;
+      filterDate.value = today;
+
+      renderAll();
+    })();
+  </script>
+</body>
+</html>
